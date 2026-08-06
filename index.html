@@ -17,6 +17,9 @@
     .btn-quick:hover { background: #007bff; color: white; border-color: #007bff; }
     .waypoint-group { display: flex; gap: 8px; margin-bottom: 8px; }
     .waypoint-group input { flex: 1; }
+    .traveler-group { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+    .traveler-group input[type="text"] { flex: 1; }
+    .traveler-fuel-label { display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: normal; white-space: nowrap; color: #495057; }
     .btn-remove { width: 40px; background: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
     .btn-add { background: #6c757d; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; font-size: 13px; margin-bottom: 15px; }
     .btn-calc { width: 100%; background-color: #007bff; color: white; border: none; padding: 12px; border-radius: 5px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 15px; }
@@ -49,7 +52,7 @@
 <body>
 
 <div class="container">
-  <h2>🤖 축산환경관리원 여비계산 AI봇.v.1</h2>
+  <h2>🤖 축산환경관리원 여비계산 AI봇.1.2</h2>
 
   <!-- 1. 기본 정보 -->
   <h3>1. 기본 출장 정보</h3>
@@ -60,6 +63,20 @@
   </div>
   <div class="notice-info" style="margin-bottom:15px;">
     * 연동정보: 오피넷API, 티맵API
+  </div>
+
+  <!-- 1-1. 출장 인원 (여러 명 동시 출장 지원) -->
+  <h3>1-1. 출장 인원</h3>
+  <div id="travelersContainer">
+    <div class="traveler-group" data-idx="0">
+      <input type="text" class="traveler-input" placeholder="출장자 성명 (예: 이종덕)">
+      <label class="traveler-fuel-label"><input type="radio" name="fuelPayer" value="0" checked> 유류비 부담(운전자)</label>
+      <button type="button" class="btn-remove" onclick="removeTraveler(0)">✕</button>
+    </div>
+  </div>
+  <button type="button" class="btn-add" id="btnAddTraveler" onclick="addTraveler()">+ 출장자 추가 (최대 6명)</button>
+  <div class="notice-info" style="margin-bottom:15px;">
+    * 일비/식비는 인원수만큼 곱해서 계산되고, 유류비(자차)·통행료는 "유류비 부담(운전자)"로 선택된 1명에게만 배정됩니다.
   </div>
 
   <!-- 2. 경로 설정 -->
@@ -169,30 +186,42 @@
     <!-- 공식 여비 정산 명세서 표 -->
     <table class="settlement-table">
       <tr>
+        <th>구분</th>
+        <th></th>
+        <th>금액</th>
+        <th>비고</th>
+      </tr>
+      <tr>
         <th rowspan="2">출장여비</th>
         <th>일비</th>
         <td id="setDaily">0원</td>
+        <td id="remarkDaily"></td>
       </tr>
       <tr>
         <th>식비</th>
         <td id="setMeal">0원</td>
+        <td id="remarkMeal"></td>
       </tr>
       <tr>
         <th rowspan="2">실비정산</th>
         <th>자차(유류비)</th>
         <td id="setFuel">0원</td>
+        <td id="remarkFuel"></td>
       </tr>
       <tr>
         <th>교통비 등(통행료)</th>
         <td id="setToll">0원</td>
+        <td id="remarkToll"></td>
       </tr>
       <tr>
         <th colspan="2">기타</th>
         <td id="setEtc">0원</td>
+        <td id="remarkEtc"></td>
       </tr>
       <tr class="total-row">
         <th colspan="2">합계</th>
         <td id="setTotal">0원</td>
+        <td id="remarkTotal"></td>
       </tr>
     </table>
 
@@ -264,6 +293,59 @@
     if (el) el.remove();
     waypointCount--;
     document.getElementById("btnAddWaypoint").disabled = false;
+  }
+
+  // --- 출장 인원(여러 명 동시 출장) 관리 ---
+  let travelerSeq = 0; // 항상 증가하는 고유 번호 (라디오 value 충돌 방지용)
+  const maxTravelers = 6;
+
+  function addTraveler() {
+    const container = document.getElementById("travelersContainer");
+    const currentCount = container.querySelectorAll(".traveler-group").length;
+    if (currentCount >= maxTravelers) return;
+
+    travelerSeq++;
+    const div = document.createElement("div");
+    div.className = "traveler-group";
+    div.dataset.idx = travelerSeq;
+    div.innerHTML = `
+      <input type="text" class="traveler-input" placeholder="출장자 성명">
+      <label class="traveler-fuel-label"><input type="radio" name="fuelPayer" value="${travelerSeq}"> 유류비 부담(운전자)</label>
+      <button type="button" class="btn-remove" onclick="removeTraveler(${travelerSeq})">✕</button>
+    `;
+    container.appendChild(div);
+
+    if (container.querySelectorAll(".traveler-group").length >= maxTravelers) {
+      document.getElementById("btnAddTraveler").disabled = true;
+    }
+  }
+
+  function removeTraveler(idx) {
+    const container = document.getElementById("travelersContainer");
+    const groups = container.querySelectorAll(".traveler-group");
+    if (groups.length <= 1) return; // 최소 1명은 남겨둔다
+
+    const el = container.querySelector(`.traveler-group[data-idx="${idx}"]`);
+    const wasChecked = el?.querySelector('input[type="radio"]')?.checked;
+    if (el) el.remove();
+
+    // 지우려던 사람이 유류비 부담자였다면, 남은 첫 번째 사람으로 자동 재지정
+    if (wasChecked) {
+      const firstRadio = container.querySelector('input[type="radio"]');
+      if (firstRadio) firstRadio.checked = true;
+    }
+
+    document.getElementById("btnAddTraveler").disabled = false;
+  }
+
+  function collectTravelers() {
+    const groups = document.querySelectorAll("#travelersContainer .traveler-group");
+    return Array.from(groups).map((g, i) => {
+      const nameInput = g.querySelector(".traveler-input");
+      const radio = g.querySelector('input[type="radio"]');
+      const name = nameInput.value.trim() || `출장자${i + 1}`;
+      return { name, isFuelPayer: !!(radio && radio.checked) };
+    });
   }
 
   function toggleFuelSelect() {
@@ -420,11 +502,19 @@
 
       const mealDeduction = parseInt(document.getElementById("mealOption").value);
       const mealRates = [25000, 16000, 8000, 0];
-      // 식비는 근무지 외(12km 이상) 출장에만 지급. 근무지 내는 0원.
-      const mealCost = isOut ? mealRates[mealDeduction] : 0;
+      // 식비는 근무지 외(12km 이상) 출장에만 지급. 근무지 내는 0원. (인당 금액)
+      const mealPerPerson = isOut ? mealRates[mealDeduction] : 0;
+      const dailyPerPerson = dailyCost;
+
+      // --- 출장 인원 반영 ---
+      const travelers = collectTravelers();
+      const numPeople = travelers.length;
+      const totalDaily = dailyPerPerson * numPeople;
+      const totalMeal = mealPerPerson * numPeople;
+      const fuelPayer = travelers.find(t => t.isFuelPayer) || travelers[0];
 
       const tollCost = (transport === 'car') ? totalToll : 0;
-      const totalCost = transCost + tollCost + dailyCost + mealCost;
+      const totalCost = transCost + tollCost + totalDaily + totalMeal;
 
       document.getElementById("resTripType").textContent = isRoundTrip ? "왕복" : "편도";
       document.getElementById("resDistance").textContent = totalDistance.toFixed(1);
@@ -436,6 +526,12 @@
       document.getElementById("resDestName").textContent = route.destInfo?.name || destination;
       document.getElementById("resDestAddress").textContent = route.destInfo?.address || "";
 
+      const transportLabel = transport === 'car' ? '자차' : transport === 'public' ? '대중교통' : transport === 'official' ? '관차' : '도보';
+      const fuelLabelMap = {
+        B027: '보통휘발유', D047: '자동차경유', K015: 'LPG/부탄',
+        HYBRID: '하이브리드', PHEV: '플러그인 하이브리드', EV: '전기', HYDROGEN: '수소'
+      };
+
       // --- 유류비(자차) 계산 상세: 별도 박스 ---
       const fuelBox = document.getElementById("fuelBox");
       if (transport === 'car') {
@@ -445,27 +541,46 @@
           · 총 거리: ${isRoundTrip ? `편도 ${singleDistance}km × 2(왕복) = ` : ''}${totalDistance.toFixed(1)}km<br>
           · 적용 단가(오피넷): ${unitPrice.toLocaleString()}원 / L(kWh,kg)<br>
           · 적용 연비: ${fe} km/L(kWh,kg)<br>
-          · 계산식: ${totalDistance.toFixed(1)}km × ${unitPrice.toLocaleString()}원 ÷ ${fe} = <b>${transCost.toLocaleString()}원</b>
+          · 계산식: ${totalDistance.toFixed(1)}km × ${unitPrice.toLocaleString()}원 ÷ ${fe} = <b>${transCost.toLocaleString()}원</b><br>
+          · 유류비 부담자: <b>${fuelPayer.name}</b>
         `;
       } else {
         fuelBox.style.display = "none";
       }
 
-      // --- 공식 여비 정산 명세서 표 ---
+      // --- 공식 여비 정산 명세서 표 (인원수 반영) ---
       const etcCost = 0; // 기타 비용 항목 (현재 자동계산 없음, 필요 시 수동 입력 항목 추가 가능)
-      document.getElementById("setDaily").textContent = dailyCost.toLocaleString() + "원";
-      document.getElementById("setMeal").textContent = mealCost.toLocaleString() + "원";
-      document.getElementById("setFuel").textContent = transCost.toLocaleString() + "원";
-      document.getElementById("setToll").textContent = tollCost.toLocaleString() + "원";
-      document.getElementById("setEtc").textContent = etcCost.toLocaleString() + "원";
-      document.getElementById("setTotal").textContent = (totalCost + etcCost).toLocaleString() + "원";
+
+      document.getElementById("setDaily").textContent =
+        numPeople > 1 ? `${dailyPerPerson.toLocaleString()} x ${numPeople}명 = ${totalDaily.toLocaleString()}원` : `${totalDaily.toLocaleString()}원`;
+      document.getElementById("setMeal").textContent =
+        numPeople > 1 ? `${mealPerPerson.toLocaleString()} x ${numPeople}명 = ${totalMeal.toLocaleString()}원` : `${totalMeal.toLocaleString()}원`;
+      document.getElementById("setFuel").textContent = (transport === 'car') ? `${transCost.toLocaleString()}원` : "-";
+      document.getElementById("setToll").textContent = (tollCost > 0) ? `${tollCost.toLocaleString()}원` : "-";
+      document.getElementById("setEtc").textContent = (etcCost > 0) ? `${etcCost.toLocaleString()}원` : "-";
+
+      document.getElementById("remarkDaily").textContent = transportLabel;
+      document.getElementById("remarkMeal").textContent = "";
+      document.getElementById("remarkFuel").textContent = (transport === 'car') ? `자차(${fuelLabelMap[fuelType] || fuelType})` : "";
+      document.getElementById("remarkToll").textContent = "";
+      document.getElementById("remarkEtc").textContent = "";
+      document.getElementById("remarkTotal").textContent = `${isOut ? '근무지외' : '근무지내'}(${totalDistance.toFixed(0)}km)`;
+
+      // --- 합계: 인당 배분 (유류비 부담자에게만 유류비+통행료 추가 배정) ---
+      const shareBase = dailyPerPerson + mealPerPerson; // 1인당 일비+식비
+      const perPersonLines = travelers.map(t => {
+        const share = shareBase + (t.isFuelPayer ? (transCost + tollCost) : 0);
+        return `(${t.name}) ${share.toLocaleString()}원`;
+      });
+      document.getElementById("setTotal").innerHTML = perPersonLines.join("<br>");
 
       // --- 적용 기준 요약 (간단 메모) ---
       document.getElementById("criteriaNote").innerHTML = `
-        * 적용 기준: ${transport === 'car' ? '자차' : transport === 'public' ? '대중교통' : transport === 'official' ? '관차' : '도보'} /
+        * 적용 기준: ${transportLabel} / 출장인원 ${numPeople}명 /
         ${isOut ? '근무지 외(12km 이상)' : '근무지 내(12km 미만)' + (isOut ? '' : ` / 근무 ${workHours === 'over4' ? '4시간 이상' : '4시간 미만'}`)} /
         ${isRoundTrip ? '왕복' : '편도'} 기준으로 산정되었습니다.
-        식비는 근무지 외 출장에만 지급됩니다.
+        일비·식비는 인원수만큼 곱해 산정되며, 식비는 근무지 외 출장에만 지급됩니다.
+        유류비·통행료는 유류비 부담자(${fuelPayer.name})에게만 배정됩니다.
       `;
 
       document.getElementById("resultBox").style.display = "block";
