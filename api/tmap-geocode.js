@@ -11,7 +11,7 @@
 // 프론트엔드 호출 예:
 //   fetch(`/api/tmap-geocode?q=${encodeURIComponent('세종특별자치시 한누리대로 219')}`)
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   // CORS: 같은 사이트에서만 부르는 게 기본이지만, 필요시 도메인 제한 가능
   res.setHeader('Access-Control-Allow-Origin', '*');
 
@@ -61,7 +61,12 @@ export default async function handler(req, res) {
       return res.status(502).json({ ok: false, error: 'TMAP 응답에서 좌표를 파싱하지 못했습니다.', raw: poi });
     }
 
-    return res.status(200).json({ ok: true, name: poi.name, x, y });
+    // 주소 조합 (시/도 + 시/군/구 + 읍/면/동 + 도로명 + 건물번호). 필드가 없으면 빈 값은 자동으로 제외됨.
+    const addressParts = [poi.upperAddrName, poi.middleAddrName, poi.lowerAddrName, poi.roadName, poi.firstNo]
+      .filter((v) => v && String(v).trim() !== '' && v !== '0');
+    const address = addressParts.join(' ');
+
+    return res.status(200).json({ ok: true, name: poi.name, address, x, y });
   } catch (err) {
     return res.status(500).json({ ok: false, error: '서버 내부 오류', detail: String(err) });
   }
