@@ -40,7 +40,7 @@
 <body>
 
 <div class="container">
-  <h2>💚 축산환경관리원 여비계산 AI봇</h2>
+  <h2>🤖 축산환경관리원 여비계산 AI봇</h2>
 
   <!-- 1. 기본 정보 -->
   <h3>1. 기본 출장 정보</h3>
@@ -59,7 +59,7 @@
   <div class="quick-btn-group">
     <button type="button" class="btn-quick" onclick="setQuickDestination('농림축산식품부')">📍 농림축산식품부</button>
     <button type="button" class="btn-quick" onclick="setQuickDestination('기후에너지환경부')">📍 기후에너지환경부</button>
-    <button type="button" class="btn-quick" onclick="setQuickDestination('국회의사당')">📍 국회의사당</button>
+    <button type="button" class="btn-quick" onclick="setQuickDestination('국회의사당')">📍 국회의사당<</button>
   </div>
 
   <div class="form-group">
@@ -167,7 +167,6 @@
 </div>
 
 <script>
-  const OPINET_KEY = "F260805687";
   const DEFAULT_ORIGIN = "세종특별자치시 한누리대로 219 (축산환경관리원)";
   let waypointCount = 0;
   const maxWaypoints = 5;
@@ -227,25 +226,14 @@
     }
 
     const opinetProdCode = FE_TABLE[prodCode]?.code || 'B027';
-    const targetUrl = `https://www.opinet.co.kr/api/avgRecentPrice.do?out=xml&code=${OPINET_KEY}&date=${dateStr}&prodcd=${opinetProdCode}`;
-    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
 
     try {
-      const response = await fetch(proxyUrl);
-      const data = await response.json();
-      if (data.contents) {
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(data.contents, "text/xml");
-        const oilList = xmlDoc.getElementsByTagName("OIL");
-
-        for (let i = 0; i < oilList.length; i++) {
-          const item = oilList[i];
-          const pCode = item.getElementsByTagName("PRODCD")[0]?.textContent;
-          if (pCode === opinetProdCode) {
-            return parseFloat(item.getElementsByTagName("PRICE")[0]?.textContent || 0);
-          }
-        }
+      const res = await fetch(`/api/opinet-price?date=${dateStr}&prodcd=${opinetProdCode}`);
+      const data = await res.json();
+      if (data.ok) {
+        return data.price;
       }
+      console.warn("오피넷 조회 실패로 예비 단가 적용:", data.error);
     } catch (e) {
       console.warn("오피넷 API 수신 실패로 예비 단가 적용:", e);
     }
