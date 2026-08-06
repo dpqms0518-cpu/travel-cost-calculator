@@ -69,8 +69,8 @@
   <h3>1-1. 출장 인원</h3>
   <div id="travelersContainer">
     <div class="traveler-group" data-idx="0">
-      <input type="text" class="traveler-input" placeholder="출장자 성명 (예: 김깨농)">
-      <label class="traveler-fuel-label"><input type="radio" name="fuelPayer" value="0" checked> 유류비 부담(운전자)</label>
+      <input type="text" class="traveler-input" placeholder="출장자 성명 (예: 이종덕)">
+      <label class="traveler-fuel-label"><input type="checkbox" class="fuel-payer-check" checked onchange="handleFuelPayerToggle(this)"> 유류비 부담(운전자)</label>
       <button type="button" class="btn-remove" onclick="removeTraveler(0)">✕</button>
     </div>
   </div>
@@ -87,7 +87,6 @@
     <button type="button" class="btn-quick" onclick="setQuickDestination('농림축산식품부')">📍 농림축산식품부</button>
     <button type="button" class="btn-quick" onclick="setQuickDestination('기후에너지환경부')">📍 기후에너지환경부</button>
     <button type="button" class="btn-quick" onclick="setQuickDestination('국회의사당')">📍 국회의사당</button>
-    <button type="button" class="btn-quick" onclick="resetOrigin()">🔄 기본 출발지 세팅</button>
   </div>
 
   <div class="form-group">
@@ -310,7 +309,7 @@
     div.dataset.idx = travelerSeq;
     div.innerHTML = `
       <input type="text" class="traveler-input" placeholder="출장자 성명">
-      <label class="traveler-fuel-label"><input type="radio" name="fuelPayer" value="${travelerSeq}"> 유류비 부담(운전자)</label>
+      <label class="traveler-fuel-label"><input type="checkbox" class="fuel-payer-check" onchange="handleFuelPayerToggle(this)"> 유류비 부담(운전자)</label>
       <button type="button" class="btn-remove" onclick="removeTraveler(${travelerSeq})">✕</button>
     `;
     container.appendChild(div);
@@ -326,25 +325,29 @@
     if (groups.length <= 1) return; // 최소 1명은 남겨둔다
 
     const el = container.querySelector(`.traveler-group[data-idx="${idx}"]`);
-    const wasChecked = el?.querySelector('input[type="radio"]')?.checked;
     if (el) el.remove();
-
-    // 지우려던 사람이 유류비 부담자였다면, 남은 첫 번째 사람으로 자동 재지정
-    if (wasChecked) {
-      const firstRadio = container.querySelector('input[type="radio"]');
-      if (firstRadio) firstRadio.checked = true;
-    }
+    // 참고: 유류비 부담자를 지웠어도 자동으로 다른 사람에게 재지정하지 않는다.
+    // (부담자 없음도 허용되는 정상 상태이므로, 필요하면 사용자가 직접 다시 체크)
 
     document.getElementById("btnAddTraveler").disabled = false;
+  }
+
+  // 유류비 부담(운전자) 체크박스는 동시에 최대 1명만 선택 가능하지만,
+  // 다시 클릭해서 체크 해제(= 부담자 없음)도 가능하다.
+  function handleFuelPayerToggle(checkbox) {
+    if (!checkbox.checked) return; // 체크 해제는 그대로 허용
+    document.querySelectorAll(".fuel-payer-check").forEach((cb) => {
+      if (cb !== checkbox) cb.checked = false;
+    });
   }
 
   function collectTravelers() {
     const groups = document.querySelectorAll("#travelersContainer .traveler-group");
     return Array.from(groups).map((g, i) => {
       const nameInput = g.querySelector(".traveler-input");
-      const radio = g.querySelector('input[type="radio"]');
+      const checkbox = g.querySelector(".fuel-payer-check");
       const name = nameInput.value.trim() || `출장자${i + 1}`;
-      return { name, isFuelPayer: !!(radio && radio.checked) };
+      return { name, isFuelPayer: !!(checkbox && checkbox.checked) };
     });
   }
 
@@ -511,7 +514,7 @@
       const numPeople = travelers.length;
       const totalDaily = dailyPerPerson * numPeople;
       const totalMeal = mealPerPerson * numPeople;
-      const fuelPayer = travelers.find(t => t.isFuelPayer) || travelers[0];
+      const fuelPayer = travelers.find(t => t.isFuelPayer); // 없을 수 있음 (undefined)
 
       const tollCost = (transport === 'car') ? totalToll : 0;
       const totalCost = transCost + tollCost + totalDaily + totalMeal;
@@ -542,7 +545,7 @@
           · 적용 단가(오피넷): ${unitPrice.toLocaleString()}원 / L(kWh,kg)<br>
           · 적용 연비: ${fe} km/L(kWh,kg)<br>
           · 계산식: ${totalDistance.toFixed(1)}km × ${unitPrice.toLocaleString()}원 ÷ ${fe} = <b>${transCost.toLocaleString()}원</b><br>
-          · 유류비 부담자: <b>${fuelPayer.name}</b>
+          · 유류비 부담자: <b>${fuelPayer ? fuelPayer.name : '미지정'}</b>
         `;
       } else {
         fuelBox.style.display = "none";
@@ -569,7 +572,7 @@
       // --- 합계: 인당 배분 (유류비 부담자에게만 유류비+통행료 추가 배정) ---
       const shareBase = dailyPerPerson + mealPerPerson; // 1인당 일비+식비
       const perPersonLines = travelers.map(t => {
-        const share = shareBase + (t.isFuelPayer ? (transCost + tollCost) : 0);
+        const share = shareBase + ((fuelPayer && t.isFuelPayer) ? (transCost + tollCost) : 0);
         return `(${t.name}) ${share.toLocaleString()}원`;
       });
       document.getElementById("setTotal").innerHTML = perPersonLines.join("<br>");
@@ -580,7 +583,7 @@
         ${isOut ? '근무지 외(12km 이상)' : '근무지 내(12km 미만)' + (isOut ? '' : ` / 근무 ${workHours === 'over4' ? '4시간 이상' : '4시간 미만'}`)} /
         ${isRoundTrip ? '왕복' : '편도'} 기준으로 산정되었습니다.
         일비·식비는 인원수만큼 곱해 산정되며, 식비는 근무지 외 출장에만 지급됩니다.
-        유류비·통행료는 유류비 부담자(${fuelPayer.name})에게만 배정됩니다.
+        유류비·통행료는 ${fuelPayer ? `유류비 부담자(${fuelPayer.name})에게만` : '별도로(개인 배분 없이)'} 배정됩니다.
       `;
 
       document.getElementById("resultBox").style.display = "block";
