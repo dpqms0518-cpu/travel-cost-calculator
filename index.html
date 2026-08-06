@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>축산환경관리원 여비계산 AI봇</title>
+  <title>🤖 축산환경관리원 여비계산 AI봇</title>
   <style>
     body { font-family: 'Malgun Gothic', 'Noto Sans KR', sans-serif; margin: 20px; background-color: #f4f6f9; color: #333; line-height: 1.6; }
     .container { max-width: 680px; margin: 0 auto; background: #ffffff; padding: 25px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
@@ -40,7 +40,7 @@
 <body>
 
 <div class="container">
-  <h2>🤖 축산환경관리원 여비계산 AI봇</h2>
+  <h2>🏛️ 축산환경관리원 출장비 자동 정산 계산기</h2>
 
   <!-- 1. 기본 정보 -->
   <h3>1. 기본 출장 정보</h3>
@@ -60,6 +60,7 @@
     <button type="button" class="btn-quick" onclick="setQuickDestination('농림축산식품부')">📍 농림축산식품부</button>
     <button type="button" class="btn-quick" onclick="setQuickDestination('기후에너지환경부')">📍 기후에너지환경부</button>
     <button type="button" class="btn-quick" onclick="setQuickDestination('국회의사당')">📍 국회의사당</button>
+    <button type="button" class="btn-quick" onclick="resetOrigin()">🔄 기본 출발지 세팅</button>
   </div>
 
   <div class="form-group">
@@ -172,7 +173,15 @@
   const maxWaypoints = 5;
 
   window.onload = function() {
-    document.getElementById("startDate").value = new Date().toISOString().substring(0, 10);
+    // 오피넷 유가 데이터는 당일 조회가 안 되고 전일(어제)부터 조회 가능하므로,
+    // 날짜 선택의 최댓값을 어제로 제한한다.
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yStr = yesterday.toISOString().substring(0, 10);
+
+    const startDateInput = document.getElementById("startDate");
+    startDateInput.max = yStr;
+    startDateInput.value = yStr;
   };
 
   function setQuickDestination(destName) {
