@@ -52,7 +52,12 @@
 <body>
 
 <div class="container">
-  <h2>🤖 축산환경관리원 여비계산 AI봇.1.2</h2>
+  <h2>🤖 축산환경관리원 여비계산 AI봇</h2>
+
+  <div class="quick-btn-group" style="margin-bottom:15px;">
+    <a href="https://www.opinet.co.kr/user/dopospdrg/dopOsPdrgSelect.do" target="_blank" rel="noopener" class="btn-quick" style="text-decoration:none;">⛽ 오피넷 바로가기</a>
+    <a href="https://map.naver.com/p/?c=14163850.5599634,4372026.8580034,15,0,0,0,dh" target="_blank" rel="noopener" class="btn-quick" style="text-decoration:none;">🗺️ 지도 바로가기</a>
+  </div>
 
   <!-- 1. 기본 정보 -->
   <h3>1. 기본 출장 정보</h3>
@@ -69,7 +74,7 @@
   <h3>1-1. 출장 인원</h3>
   <div id="travelersContainer">
     <div class="traveler-group" data-idx="0">
-      <input type="text" class="traveler-input" placeholder="출장자 성명 (예: 김깨농)">
+      <input type="text" class="traveler-input" placeholder="출장자 성명 (예: 이종덕)">
       <label class="traveler-fuel-label"><input type="checkbox" class="fuel-payer-check" checked onchange="handleFuelPayerToggle(this)"> 유류비 부담(운전자)</label>
       <button type="button" class="btn-remove" onclick="removeTraveler(0)">✕</button>
     </div>
@@ -467,7 +472,10 @@
       const singleToll = route.tollFare;
       const totalToll = isRoundTrip ? (singleToll * 2) : singleToll;
 
-      const isOut = totalDistance >= 12;
+      // 세종특별자치시 내 이동은 거리(km)와 무관하게 무조건 "근무지 내"로 처리
+      const destFullText = `${route.destInfo?.name || destination} ${route.destInfo?.address || ''}`;
+      const isSejongDestination = destFullText.includes('세종');
+      const isOut = isSejongDestination ? false : (totalDistance >= 12);
 
       const statusEl = document.getElementById("statusMessage");
       if (route.isApiSuccess) {
@@ -521,7 +529,9 @@
 
       document.getElementById("resTripType").textContent = isRoundTrip ? "왕복" : "편도";
       document.getElementById("resDistance").textContent = totalDistance.toFixed(1);
-      document.getElementById("resLocationType").textContent = isOut ? "근무지 외 (12km 이상)" : "근무지 내 (12km 이내)";
+      document.getElementById("resLocationType").textContent = isSejongDestination
+        ? "근무지 내 (세종시 내 이동)"
+        : (isOut ? "근무지 외 (12km 이상)" : "근무지 내 (12km 이내)");
 
       // 출발지/도착지 실제 검색된 회사명 + 주소 표시
       document.getElementById("resOriginName").textContent = route.originInfo?.name || origin;
@@ -567,7 +577,9 @@
       document.getElementById("remarkFuel").textContent = (transport === 'car') ? `자차(${fuelLabelMap[fuelType] || fuelType})` : "";
       document.getElementById("remarkToll").textContent = "";
       document.getElementById("remarkEtc").textContent = "";
-      document.getElementById("remarkTotal").textContent = `${isOut ? '근무지외' : '근무지내'}(${totalDistance.toFixed(0)}km)`;
+      document.getElementById("remarkTotal").textContent = isSejongDestination
+        ? `근무지내(세종시내, ${totalDistance.toFixed(0)}km)`
+        : `${isOut ? '근무지외' : '근무지내'}(${totalDistance.toFixed(0)}km)`;
 
       // --- 합계: 인당 배분 (유류비 부담자에게만 유류비+통행료 추가 배정) ---
       const shareBase = dailyPerPerson + mealPerPerson; // 1인당 일비+식비
