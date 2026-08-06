@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>축산환경관리원 출장비 자동 정산 계산기</title>
+  <style>
+    body { font-family: 'Malgun Gothic', 'Noto Sans KR', sans-serif; margin: 20px; background-color: #f4f6f9; color: #333; line-height: 1.6; }
+    .container { max-width: 680px; margin: 0 auto; background: #ffffff; padding: 25px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    h2 { border-bottom: 2px solid #007bff; padding-bottom: 10px; color: #1a252f; margin-top: 0; }
+    h3 { margin-top: 20px; color: #2c3e50; font-size: 16px; border-left: 4px solid #007bff; padding-left: 8px; }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 14px; }
+    input[type="text"], input[type="number"], input[type="date"], select { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #cccccc; border-radius: 5px; font-size: 14px; }
+    .quick-btn-group { display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; }
+    .btn-quick { background: #e9ecef; border: 1px solid #ced4da; padding: 6px 12px; border-radius: 15px; font-size: 13px; cursor: pointer; color: #495057; font-weight: bold; }
+    .btn-quick:hover { background: #007bff; color: white; border-color: #007bff; }
+    .waypoint-group { display: flex; gap: 8px; margin-bottom: 8px; }
+    .waypoint-group input { flex: 1; }
+    .btn-remove { width: 40px; background: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+    .btn-add { background: #6c757d; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; font-size: 13px; margin-bottom: 15px; }
+    .btn-calc { width: 100%; background-color: #007bff; color: white; border: none; padding: 12px; border-radius: 5px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 15px; }
+    .btn-calc:hover { background-color: #0056b3; }
+    .btn-calc:disabled { background-color: #9db8d8; cursor: not-allowed; }
+    .radio-group { display: flex; gap: 15px; font-size: 14px; align-items: center; flex-wrap: wrap; }
+    .radio-group label { font-weight: normal; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+    .result-box { margin-top: 25px; padding: 20px; background: #eef4fb; border-radius: 8px; border: 1px solid #b6d4fe; }
+    .result-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    .result-table th, .result-table td { padding: 10px; text-align: left; border-bottom: 1px solid #d0e2ff; font-size: 14px; }
+    .result-table th { width: 45%; color: #495057; }
+    .price-tag { color: #d9534f; font-weight: bold; font-size: 15px; }
+    .total-row { background: #d0e2ff; font-weight: bold; font-size: 16px; }
+    .total-row td { color: #084298; padding: 12px 10px; }
+    .status-msg { font-size: 13px; font-weight: bold; margin-top: 8px; padding: 8px; border-radius: 4px; }
+    .status-success { background-color: #d1e7dd; color: #0f5132; }
+    .status-warning { background-color: #fff3cd; color: #664d03; }
+    .notice-info { font-size: 12px; color: #6c757d; margin-top: 4px; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h2>🏛️ 축산환경관리원 출장비 자동 정산 계산기</h2>
+
+  <!-- 1. 기본 정보 -->
+  <h3>1. 기본 출장 정보</h3>
+  <div class="form-group">
+    <label for="startDate">출장 시작일 (오피넷 유가 기준일)</label>
+    <input type="date" id="startDate">
+  </div>
+  <div class="notice-info" style="margin-bottom:15px;">
+    * 이 페이지는 카카오 대신 <b>TMAP(SK Open API)</b>을 서버(백엔드) 경유로 호출합니다.
+    실제 좌표/경로 조회를 하려면 <code>/api/tmap-geocode</code>, <code>/api/tmap-route</code>
+    엔드포인트가 배포된 서버(Vercel 등)에 이 파일을 함께 올려야 하며,
+    서버 환경변수에 <code>TMAP_APP_KEY</code>가 설정되어 있어야 합니다.
+  </div>
+
+  <!-- 2. 경로 설정 -->
+  <h3>2. 이동 경로 설정</h3>
+
+  <label>자주 쓰는 경로 빠른 선택</label>
+  <div class="quick-btn-group">
+    <button type="button" class="btn-quick" onclick="setQuickDestination('농림축산식품부')">📍 농림축산식품부</button>
+    <button type="button" class="btn-quick" onclick="setQuickDestination('기후에너지환경부')">📍 기후에너지환경부</button>
+    <button type="button" class="btn-quick" onclick="resetOrigin()">🔄 기본 출발지 세팅</button>
+  </div>
+
+  <div class="form-group">
+    <label for="origin">출발지</label>
+    <input type="text" id="origin" value="세종특별자치시 한누리대로 219 (축산환경관리원)">
+  </div>
+
+  <div id="waypointsContainer"></div>
+  <button type="button" class="btn-add" id="btnAddWaypoint" onclick="addWaypoint()">+ 경유지 추가 (최대 5개)</button>
+
+  <div class="form-group">
+    <label for="destination">도착지</label>
+    <input type="text" id="destination" value="농림축산식품부" placeholder="예: 농림축산식품부">
+  </div>
+
+  <!-- 3. 조건 및 옵션 선택 -->
+  <h3>3. 정산 옵션 선택</h3>
+
+  <div class="form-group">
+    <label>왕복 / 편도 구분</label>
+    <div class="radio-group">
+      <label><input type="radio" name="tripType" value="round" checked> 왕복 (기본)</label>
+      <label><input type="radio" name="tripType" value="oneWay"> 편도</label>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label>이동 수단</label>
+    <div class="radio-group">
+      <label><input type="radio" name="transport" value="car" checked onchange="toggleFuelSelect()"> 자차</label>
+      <label><input type="radio" name="transport" value="official" onchange="toggleFuelSelect()"> 관차</label>
+      <label><input type="radio" name="transport" value="public" onchange="toggleFuelSelect()"> 대중교통</label>
+      <label><input type="radio" name="transport" value="walk" onchange="toggleFuelSelect()"> 도보</label>
+    </div>
+  </div>
+
+  <div class="form-group" id="fuelGroup">
+    <label for="fuelType">유종 선택 (자차 정산용)</label>
+    <select id="fuelType">
+      <option value="B027">보통휘발유 (기본연비 11.97 km/L)</option>
+      <option value="D047">자동차경유 (기본연비 12.52 km/L)</option>
+      <option value="K015">자동차부탄/LPG (기본연비 8.83 km/L)</option>
+      <option value="HYBRID">하이브리드 (기본연비 15.37 km/L)</option>
+      <option value="PHEV">플러그인 하이브리드 (기본연비 10.61 km/L)</option>
+      <option value="EV">전기차 (기본전비 5.22 km/kWh)</option>
+      <option value="HYDROGEN">수소차 (기본연비 94.9 km/kg)</option>
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label>근무 시간 (일비 산정 기준)</label>
+    <div class="radio-group">
+      <label><input type="radio" name="workHours" value="over4" checked> 4시간 이상</label>
+      <label><input type="radio" name="workHours" value="under4"> 4시간 미만</label>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label for="mealOption">식사 차감 선택 (1일 기본 25,000원)</label>
+    <select id="mealOption">
+      <option value="0">차감 없음 (25,000원)</option>
+      <option value="1">1식 제외 / 법카 사용 (16,000원)</option>
+      <option value="2">2식 제외 / 법카 사용 (8,000원)</option>
+      <option value="3">3식 제외 / 법카 사용 (0원)</option>
+    </select>
+  </div>
+
+  <button class="btn-calc" id="btnCalc" onclick="calculateTravelCost()">🚀 출장비 자동 정산 계산하기</button>
+
+  <!-- 4. 결과 출력 -->
+  <div class="result-box" id="resultBox" style="display:none;">
+    <h3>📊 최종 출장비 정산 명세서</h3>
+    <div id="statusMessage" class="status-msg"></div>
+    <table class="result-table">
+      <tr>
+        <th>이동 방식 / 총 거리</th>
+        <td><span id="resTripType">왕복</span> / <span id="resDistance">0</span> km (<span id="resLocationType">근무지 내/외</span>)</td>
+      </tr>
+      <tr>
+        <th>전국 평균 유가 (오피넷)</th>
+        <td><span id="resOilPrice">0</span> 원 / L(kWh,kg)</td>
+      </tr>
+      <tr>
+        <th>교통비 (연료비)</th>
+        <td><span class="price-tag" id="resTransCost">0</span> 원</td>
+      </tr>
+      <tr>
+        <th>통행료 (톨게이트)</th>
+        <td><span class="price-tag" id="resTollCost">0</span> 원</td>
+      </tr>
+      <tr>
+        <th>일비</th>
+        <td><span class="price-tag" id="resDailyCost">0</span> 원</td>
+      </tr>
+      <tr>
+        <th>식비</th>
+        <td><span class="price-tag" id="resMealCost">0</span> 원</td>
+      </tr>
+      <tr class="total-row">
+        <th>총 정산 지급액</th>
+        <td><span id="resTotalCost">0</span> 원</td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+<script>
+  const OPINET_KEY = "F260805687";
+  const DEFAULT_ORIGIN = "세종특별자치시 한누리대로 219 (축산환경관리원)";
+  let waypointCount = 0;
+  const maxWaypoints = 5;
+
+  window.onload = function() {
+    document.getElementById("startDate").value = new Date().toISOString().substring(0, 10);
+  };
+
+  function setQuickDestination(destName) {
+    document.getElementById("destination").value = destName;
+  }
+
+  function resetOrigin() {
+    document.getElementById("origin").value = DEFAULT_ORIGIN;
+  }
+
+  const FE_TABLE = {
+    'B027': { fe: 11.97, code: 'B027' },
+    'D047': { fe: 12.52, code: 'D047' },
+    'K015': { fe: 8.83, code: 'K015' },
+    'HYBRID': { fe: 15.37, code: 'B027' },
+    'PHEV': { fe: 10.61, code: 'B027' },
+    'EV': { fe: 5.22, fixedPrice: 347.2 },
+    'HYDROGEN': { fe: 94.9, fixedPrice: 9900 }
+  };
+
+  function addWaypoint() {
+    if (waypointCount >= maxWaypoints) return;
+    waypointCount++;
+    const container = document.getElementById("waypointsContainer");
+    const div = document.createElement("div");
+    div.className = "waypoint-group";
+    div.id = `waypoint-group-${waypointCount}`;
+    div.innerHTML = `
+      <input type="text" class="waypoint-input" placeholder="경유지 ${waypointCount} (장소명 또는 주소)">
+      <button type="button" class="btn-remove" onclick="removeWaypoint(${waypointCount})">✕</button>
+    `;
+    container.appendChild(div);
+    if (waypointCount >= maxWaypoints) document.getElementById("btnAddWaypoint").disabled = true;
+  }
+
+  function removeWaypoint(id) {
+    const el = document.getElementById(`waypoint-group-${id}`);
+    if (el) el.remove();
+    waypointCount--;
+    document.getElementById("btnAddWaypoint").disabled = false;
+  }
+
+  function toggleFuelSelect() {
+    const transport = document.querySelector('input[name="transport"]:checked').value;
+    document.getElementById("fuelGroup").style.display = (transport === 'car') ? 'block' : 'none';
+  }
+
+  async function fetchOpinetNationalPrice(dateStr, prodCode) {
+    if (FE_TABLE[prodCode] && FE_TABLE[prodCode].fixedPrice) {
+      return FE_TABLE[prodCode].fixedPrice;
+    }
+
+    const opinetProdCode = FE_TABLE[prodCode]?.code || 'B027';
+    const targetUrl = `https://www.opinet.co.kr/api/avgRecentPrice.do?out=xml&code=${OPINET_KEY}&date=${dateStr}&prodcd=${opinetProdCode}`;
+    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
+
+    try {
+      const response = await fetch(proxyUrl);
+      const data = await response.json();
+      if (data.contents) {
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(data.contents, "text/xml");
+        const oilList = xmlDoc.getElementsByTagName("OIL");
+
+        for (let i = 0; i < oilList.length; i++) {
+          const item = oilList[i];
+          const pCode = item.getElementsByTagName("PRODCD")[0]?.textContent;
+          if (pCode === opinetProdCode) {
+            return parseFloat(item.getElementsByTagName("PRICE")[0]?.textContent || 0);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("오피넷 API 수신 실패로 예비 단가 적용:", e);
+    }
+
+    const fallbackPrices = { "B027": 1685.5, "D047": 1540.2, "K015": 1015.0 };
+    return fallbackPrices[opinetProdCode] || 1650;
+  }
+
+  // ---------------------------------------------------------------------
+  // 카카오 -> TMAP 서버 프록시 방식으로 교체된 부분
+  // 브라우저는 절대 apis.openapi.sk.com 을 직접 호출하지 않고,
+  // 우리 서버(/api/tmap-geocode, /api/tmap-route)만 호출한다.
+  // ---------------------------------------------------------------------
+
+  async function getTmapCoord(keyword) {
+    try {
+      const res = await fetch(`/api/tmap-geocode?q=${encodeURIComponent(keyword)}`);
+      const data = await res.json();
+      if (data.ok) {
+        return { x: data.x, y: data.y };
+      }
+      console.warn("좌표 검색 실패:", keyword, data.error);
+    } catch (e) {
+      console.error("좌표 검색 예외:", e);
+    }
+    return null;
+  }
+
+  async function fetchRouteInfo(originStr, destStr, waypointsArr) {
+    const originCoord = await getTmapCoord(originStr);
+    const destCoord = await getTmapCoord(destStr);
+
+    if (!originCoord || !destCoord) {
+      return { distanceKm: 8.5, tollFare: 0, isApiSuccess: false };
+    }
+
+    const waypointCoords = [];
+    for (const wp of waypointsArr) {
+      const c = await getTmapCoord(wp);
+      if (c) waypointCoords.push(c);
+    }
+
+    try {
+      const res = await fetch('/api/tmap-route', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          startX: originCoord.x,
+          startY: originCoord.y,
+          endX: destCoord.x,
+          endY: destCoord.y,
+          waypoints: waypointCoords,
+        }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        return { distanceKm: data.distanceKm, tollFare: data.tollFare, isApiSuccess: true };
+      }
+      console.warn("경로 계산 실패:", data.error);
+    } catch (e) {
+      console.error("경로 계산 예외:", e);
+    }
+
+    return { distanceKm: 8.5, tollFare: 0, isApiSuccess: false };
+  }
+
+  async function calculateTravelCost() {
+    const btn = document.getElementById("btnCalc");
+    btn.disabled = true;
+    btn.textContent = "⏳ 계산 중...";
+
+    try {
+      const rawDate = document.getElementById("startDate").value;
+      const dateStr = rawDate.replace(/-/g, "");
+      const origin = document.getElementById("origin").value;
+      const destination = document.getElementById("destination").value;
+      const isRoundTrip = document.querySelector('input[name="tripType"]:checked').value === 'round';
+
+      const waypointInputs = document.querySelectorAll(".waypoint-input");
+      const waypoints = Array.from(waypointInputs).map(i => i.value).filter(v => v.trim() !== "");
+
+      if (!origin || !destination) {
+        alert("출발지와 도착지를 입력해 주세요.");
+        return;
+      }
+
+      const route = await fetchRouteInfo(origin, destination, waypoints);
+
+      // 왕복 선택 시 거리 및 통행료 2배 반영
+      const singleDistance = route.distanceKm;
+      const totalDistance = isRoundTrip ? (singleDistance * 2) : singleDistance;
+      const singleToll = route.tollFare;
+      const totalToll = isRoundTrip ? (singleToll * 2) : singleToll;
+
+      const isOut = totalDistance >= 12;
+
+      const statusEl = document.getElementById("statusMessage");
+      if (route.isApiSuccess) {
+        statusEl.className = "status-msg status-success";
+        statusEl.textContent = `✅ TMAP API 연동 성공: 실제 경로(${isRoundTrip ? '편도 ' + singleDistance + 'km × 2' : singleDistance + 'km'}) 및 통행료가 계산되었습니다.`;
+      } else {
+        statusEl.className = "status-msg status-warning";
+        statusEl.textContent = "⚠️ API 응답 지연/실패로 표준 추정 수치(기본 값)로 계산되었습니다.";
+      }
+
+      const transport = document.querySelector('input[name="transport"]:checked').value;
+      const fuelType = document.getElementById("fuelType").value;
+      const unitPrice = await fetchOpinetNationalPrice(dateStr, fuelType);
+
+      let transCost = 0;
+      if (transport === 'car') {
+        const fe = FE_TABLE[fuelType].fe;
+        transCost = Math.round((totalDistance * unitPrice) / fe);
+      }
+
+      const workHours = document.querySelector('input[name="workHours"]:checked').value;
+      let dailyCost = 0;
+
+      if (transport === 'car' || transport === 'public') {
+        dailyCost = (!isOut) ? ((workHours === 'over4') ? 20000 : 10000) : 25000;
+      } else if (transport === 'official') {
+        dailyCost = (!isOut) ? ((workHours === 'over4') ? 10000 : 0) : 12000;
+      } else if (transport === 'walk') {
+        if (totalDistance <= 2) {
+          dailyCost = 0;
+        } else {
+          dailyCost = (!isOut) ? ((workHours === 'over4') ? 20000 : 10000) : 25000;
+        }
+      }
+
+      const mealDeduction = parseInt(document.getElementById("mealOption").value);
+      const mealRates = [25000, 16000, 8000, 0];
+      const mealCost = mealRates[mealDeduction];
+
+      const tollCost = (transport === 'car') ? totalToll : 0;
+      const totalCost = transCost + tollCost + dailyCost + mealCost;
+
+      document.getElementById("resTripType").textContent = isRoundTrip ? "왕복" : "편도";
+      document.getElementById("resDistance").textContent = totalDistance.toFixed(1);
+      document.getElementById("resLocationType").textContent = isOut ? "근무지 외 (12km 이상)" : "근무지 내 (12km 이내)";
+      document.getElementById("resOilPrice").textContent = (transport === 'car') ? unitPrice.toLocaleString() : "-";
+      document.getElementById("resTransCost").textContent = transCost.toLocaleString();
+      document.getElementById("resTollCost").textContent = tollCost.toLocaleString();
+      document.getElementById("resDailyCost").textContent = dailyCost.toLocaleString();
+      document.getElementById("resMealCost").textContent = mealCost.toLocaleString();
+      document.getElementById("resTotalCost").textContent = totalCost.toLocaleString();
+
+      document.getElementById("resultBox").style.display = "block";
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "🚀 출장비 자동 정산 계산하기";
+    }
+  }
+</script>
+
+</body>
+</html>
