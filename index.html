@@ -274,6 +274,10 @@
         <td id="setTotal">0원</td>
         <td id="remarkTotal"></td>
       </tr>
+      <tr class="total-row">
+        <th colspan="2">총계</th>
+        <td id="setGrandTotal" colspan="2">0원</td>
+      </tr>
     </table>
 
     <div class="criteria-note" id="criteriaNote"></div>
@@ -748,11 +752,14 @@
 
       // --- 합계: 인당 배분 (유류비 부담자에게만 유류비+통행료 추가 배정) ---
       const perPersonShareBase = (totalDaily + totalMeal + totalLodging) / numPeople;
+      let grandTotal = 0;
       const perPersonLines = travelers.map(t => {
         const share = perPersonShareBase + ((fuelPayer && t.isFuelPayer) ? (transCost + tollCost) : 0);
+        grandTotal += Math.round(share);
         return `(${t.name}) ${Math.round(share).toLocaleString()}원`;
       });
       document.getElementById("setTotal").innerHTML = perPersonLines.join("<br>");
+      document.getElementById("setGrandTotal").textContent = `${grandTotal.toLocaleString()}원`;
 
       // --- 적용 기준 요약 (간단 메모) ---
       document.getElementById("criteriaNote").innerHTML = `
