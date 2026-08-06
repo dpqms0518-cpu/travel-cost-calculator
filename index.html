@@ -47,6 +47,7 @@
   <div class="form-group">
     <label for="startDate">출장 시작일 (오피넷 유가 기준일)</label>
     <input type="date" id="startDate">
+    <div class="notice-info">* 오피넷 유가는 최근 5일치만 제공되어, 어제부터 최대 5일 전까지만 선택 가능합니다.</div>
   </div>
   <div class="notice-info" style="margin-bottom:15px;">
     * 연동정보: 오피넷API, 티맵API
@@ -60,6 +61,7 @@
     <button type="button" class="btn-quick" onclick="setQuickDestination('농림축산식품부')">📍 농림축산식품부</button>
     <button type="button" class="btn-quick" onclick="setQuickDestination('기후에너지환경부')">📍 기후에너지환경부</button>
     <button type="button" class="btn-quick" onclick="setQuickDestination('국회의사당')">📍 국회의사당</button>
+    <button type="button" class="btn-quick" onclick="resetOrigin()">🔄 기본 출발지 세팅</button>
   </div>
 
   <div class="form-group">
@@ -172,13 +174,20 @@
   const maxWaypoints = 5;
 
   window.onload = function() {
-    // 오피넷 유가 데이터는 당일 조회가 안 되고 전일(어제)부터 조회 가능하므로,
-    // 날짜 선택의 최댓값을 어제로 제한한다.
-    const yesterday = new Date();
+    // 오피넷 유가 데이터는 당일 조회가 안 되고, "최근 5일간" 데이터만 제공하므로
+    // 선택 가능한 날짜를 (오늘-5일) ~ (오늘-1일) 범위로 제한한다.
+    const today = new Date();
+
+    const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
     const yStr = yesterday.toISOString().substring(0, 10);
 
+    const minDate = new Date(today);
+    minDate.setDate(minDate.getDate() - 5);
+    const minStr = minDate.toISOString().substring(0, 10);
+
     const startDateInput = document.getElementById("startDate");
+    startDateInput.min = minStr;
     startDateInput.max = yStr;
     startDateInput.value = yStr;
   };
