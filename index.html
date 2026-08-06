@@ -137,6 +137,14 @@
     <div id="statusMessage" class="status-msg"></div>
     <table class="result-table">
       <tr>
+        <th>출발지</th>
+        <td><span id="resOriginName">-</span><br><span id="resOriginAddress" style="font-size:12px;color:#6c757d;"></span></td>
+      </tr>
+      <tr>
+        <th>도착지</th>
+        <td><span id="resDestName">-</span><br><span id="resDestAddress" style="font-size:12px;color:#6c757d;"></span></td>
+      </tr>
+      <tr>
         <th>이동 방식 / 총 거리</th>
         <td><span id="resTripType">왕복</span> / <span id="resDistance">0</span> km (<span id="resLocationType">근무지 내/외</span>)</td>
       </tr>
@@ -165,8 +173,14 @@
         <td><span id="resTotalCost">0</span> 원</td>
       </tr>
     </table>
+
+    <div id="formulaBox" style="margin-top:15px; padding-top:12px; border-top:1px dashed #b6d4fe; font-size:12px; color:#495057; line-height:1.8;">
+      <b>📐 산출식</b>
+      <div id="formulaText"></div>
+    </div>
   </div>
 </div>
+
 
 <script>
   const DEFAULT_ORIGIN = "세종특별자치시 한누리대로 219 (축산환경관리원)";
@@ -270,7 +284,7 @@
       const res = await fetch(`/api/tmap-geocode?q=${encodeURIComponent(keyword)}`);
       const data = await res.json();
       if (data.ok) {
-        return { x: data.x, y: data.y };
+        return { x: data.x, y: data.y, name: data.name || keyword, address: data.address || '' };
       }
       console.warn("좌표 검색 실패:", keyword, data.error);
     } catch (e) {
@@ -283,8 +297,11 @@
     const originCoord = await getTmapCoord(originStr);
     const destCoord = await getTmapCoord(destStr);
 
+    const originInfo = originCoord ? { name: originCoord.name, address: originCoord.address } : { name: originStr, address: '' };
+    const destInfo = destCoord ? { name: destCoord.name, address: destCoord.address } : { name: destStr, address: '' };
+
     if (!originCoord || !destCoord) {
-      return { distanceKm: 8.5, tollFare: 0, isApiSuccess: false };
+      return { distanceKm: 8.5, tollFare: 0, isApiSuccess: false, originInfo, destInfo };
     }
 
     const waypointCoords = [];
@@ -307,14 +324,14 @@
       });
       const data = await res.json();
       if (data.ok) {
-        return { distanceKm: data.distanceKm, tollFare: data.tollFare, isApiSuccess: true };
+        return { distanceKm: data.distanceKm, tollFare: data.tollFare, isApiSuccess: true, originInfo, destInfo };
       }
       console.warn("경로 계산 실패:", data.error);
     } catch (e) {
       console.error("경로 계산 예외:", e);
     }
 
-    return { distanceKm: 8.5, tollFare: 0, isApiSuccess: false };
+    return { distanceKm: 8.5, tollFare: 0, isApiSuccess: false, originInfo, destInfo };
   }
 
   async function calculateTravelCost() {
@@ -398,6 +415,36 @@
       document.getElementById("resDailyCost").textContent = dailyCost.toLocaleString();
       document.getElementById("resMealCost").textContent = mealCost.toLocaleString();
       document.getElementById("resTotalCost").textContent = totalCost.toLocaleString();
+
+      // 출발지/도착지 실제 검색된 회사명 + 주소 표시
+      document.getElementById("resOriginName").textContent = route.originInfo?.name || origin;
+      document.getElementById("resOriginAddress").textContent = route.originInfo?.address || "";
+      document.getElementById("resDestName").textContent = route.destInfo?.name || destination;
+      document.getElementById("resDestAddress").textContent = route.destInfo?.address || "";
+
+      // 산출식 하단 표시 (실제 대입된 숫자로 계산 과정을 그대로 보여줌)
+      const tripLabel = isRoundTrip ? `편도 ${singleDistance}km × 2 = ${totalDistance.toFixed(1)}km` : `편도 ${totalDistance.toFixed(1)}km`;
+      let transFormula = "해당 없음 (자차가 아니므로 미지급)";
+      if (transport === 'car') {
+        const fe = FE_TABLE[fuelType].fe;
+        transFormula = `(${totalDistance.toFixed(1)}km × ${unitPrice.toLocaleString()}원) ÷ ${fe}km/L(kWh,kg) = ${transCost.toLocaleString()}원`;
+      }
+      const tollFormula = (transport === 'car')
+        ? `TMAP 경로 조회 통행료${isRoundTrip ? ' × 2(왕복)' : ''} = ${tollCost.toLocaleString()}원`
+        : "해당 없음 (자차가 아니므로 미지급)";
+      const dailyFormula = `[${transport === 'car' ? '자차' : transport === 'public' ? '대중교통' : transport === 'official' ? '관차' : '도보'} / ${isOut ? '근무지 외' : '근무지 내'}${isOut ? '' : (workHours === 'over4' ? ' / 4시간 이상' : ' / 4시간 미만')}] 기준표 적용 = ${dailyCost.toLocaleString()}원`;
+      const mealFormula = isOut
+        ? `근무지 외 출장 → 기본 25,000원 - 식사차감(${mealDeduction}식) = ${mealCost.toLocaleString()}원`
+        : `근무지 내 출장(12km 미만)은 식비 미지급 = 0원`;
+
+      document.getElementById("formulaText").innerHTML = `
+        · 총 거리 = ${tripLabel}<br>
+        · 교통비 = ${transFormula}<br>
+        · 통행료 = ${tollFormula}<br>
+        · 일비 = ${dailyFormula}<br>
+        · 식비 = ${mealFormula}<br>
+        · <b>총 지급액 = 교통비(${transCost.toLocaleString()}) + 통행료(${tollCost.toLocaleString()}) + 일비(${dailyCost.toLocaleString()}) + 식비(${mealCost.toLocaleString()}) = ${totalCost.toLocaleString()}원</b>
+      `;
 
       document.getElementById("resultBox").style.display = "block";
     } finally {
