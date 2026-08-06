@@ -35,12 +35,21 @@
     .status-success { background-color: #d1e7dd; color: #0f5132; }
     .status-warning { background-color: #fff3cd; color: #664d03; }
     .notice-info { font-size: 12px; color: #6c757d; margin-top: 4px; }
+    .fuel-box { margin: 15px 0; padding: 15px; background: #fff8e6; border: 1px solid #ffe08a; border-radius: 8px; }
+    .fuel-box h4 { margin: 0 0 8px 0; font-size: 14px; color: #7a5b00; }
+    .fuel-box div { font-size: 13px; color: #5c4400; line-height: 1.8; }
+    .settlement-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    .settlement-table th, .settlement-table td { border: 1px solid #adb5bd; padding: 10px; text-align: center; font-size: 14px; }
+    .settlement-table th { background: #eef4fb; color: #1a252f; font-weight: bold; }
+    .settlement-table td { background: #ffffff; color: #d9534f; font-weight: bold; }
+    .settlement-table .total-row th, .settlement-table .total-row td { background: #d0e2ff; color: #084298; font-size: 15px; }
+    .criteria-note { font-size: 12px; color: #6c757d; margin-top: 10px; line-height: 1.7; }
   </style>
 </head>
 <body>
 
 <div class="container">
-  <h2>🤖 축산환경관리원 여비계산 AI봇</h2>
+  <h2>🤖 축산환경관리원 여비계산 AI봇.v.1</h2>
 
   <!-- 1. 기본 정보 -->
   <h3>1. 기본 출장 정보</h3>
@@ -61,6 +70,7 @@
     <button type="button" class="btn-quick" onclick="setQuickDestination('농림축산식품부')">📍 농림축산식품부</button>
     <button type="button" class="btn-quick" onclick="setQuickDestination('기후에너지환경부')">📍 기후에너지환경부</button>
     <button type="button" class="btn-quick" onclick="setQuickDestination('국회의사당')">📍 국회의사당</button>
+    <button type="button" class="btn-quick" onclick="resetOrigin()">🔄 기본 출발지 세팅</button>
   </div>
 
   <div class="form-group">
@@ -134,7 +144,8 @@
   <div class="result-box" id="resultBox" style="display:none;">
     <h3>📊 최종 출장비 정산 명세서</h3>
     <div id="statusMessage" class="status-msg"></div>
-    <table class="result-table">
+
+    <table class="result-table" style="margin-bottom:0;">
       <tr>
         <th>출발지</th>
         <td><span id="resOriginName">-</span><br><span id="resOriginAddress" style="font-size:12px;color:#6c757d;"></span></td>
@@ -147,38 +158,48 @@
         <th>이동 방식 / 총 거리</th>
         <td><span id="resTripType">왕복</span> / <span id="resDistance">0</span> km (<span id="resLocationType">근무지 내/외</span>)</td>
       </tr>
+    </table>
+
+    <!-- 유류비(자차) 계산 상세: 별도 박스로 분리 -->
+    <div class="fuel-box" id="fuelBox">
+      <h4>⛽ 유류비(자차) 계산 상세</h4>
+      <div id="fuelDetailText"></div>
+    </div>
+
+    <!-- 공식 여비 정산 명세서 표 -->
+    <table class="settlement-table">
       <tr>
-        <th>전국 평균 유가 (오피넷)</th>
-        <td><span id="resOilPrice">0</span> 원 / L(kWh,kg)</td>
-      </tr>
-      <tr>
-        <th>교통비 (연료비)</th>
-        <td><span class="price-tag" id="resTransCost">0</span> 원</td>
-      </tr>
-      <tr>
-        <th>통행료 (톨게이트)</th>
-        <td><span class="price-tag" id="resTollCost">0</span> 원</td>
-      </tr>
-      <tr>
+        <th rowspan="2">출장여비</th>
         <th>일비</th>
-        <td><span class="price-tag" id="resDailyCost">0</span> 원</td>
+        <td id="setDaily">0원</td>
       </tr>
       <tr>
         <th>식비</th>
-        <td><span class="price-tag" id="resMealCost">0</span> 원</td>
+        <td id="setMeal">0원</td>
+      </tr>
+      <tr>
+        <th rowspan="2">실비정산</th>
+        <th>자차(유류비)</th>
+        <td id="setFuel">0원</td>
+      </tr>
+      <tr>
+        <th>교통비 등(통행료)</th>
+        <td id="setToll">0원</td>
+      </tr>
+      <tr>
+        <th colspan="2">기타</th>
+        <td id="setEtc">0원</td>
       </tr>
       <tr class="total-row">
-        <th>총 정산 지급액</th>
-        <td><span id="resTotalCost">0</span> 원</td>
+        <th colspan="2">합계</th>
+        <td id="setTotal">0원</td>
       </tr>
     </table>
 
-    <div id="formulaBox" style="margin-top:15px; padding-top:12px; border-top:1px dashed #b6d4fe; font-size:12px; color:#495057; line-height:1.8;">
-      <b>📐 산출식</b>
-      <div id="formulaText"></div>
-    </div>
+    <div class="criteria-note" id="criteriaNote"></div>
   </div>
 </div>
+
 
 
 <script>
@@ -408,12 +429,6 @@
       document.getElementById("resTripType").textContent = isRoundTrip ? "왕복" : "편도";
       document.getElementById("resDistance").textContent = totalDistance.toFixed(1);
       document.getElementById("resLocationType").textContent = isOut ? "근무지 외 (12km 이상)" : "근무지 내 (12km 이내)";
-      document.getElementById("resOilPrice").textContent = (transport === 'car') ? unitPrice.toLocaleString() : "-";
-      document.getElementById("resTransCost").textContent = transCost.toLocaleString();
-      document.getElementById("resTollCost").textContent = tollCost.toLocaleString();
-      document.getElementById("resDailyCost").textContent = dailyCost.toLocaleString();
-      document.getElementById("resMealCost").textContent = mealCost.toLocaleString();
-      document.getElementById("resTotalCost").textContent = totalCost.toLocaleString();
 
       // 출발지/도착지 실제 검색된 회사명 + 주소 표시
       document.getElementById("resOriginName").textContent = route.originInfo?.name || origin;
@@ -421,28 +436,36 @@
       document.getElementById("resDestName").textContent = route.destInfo?.name || destination;
       document.getElementById("resDestAddress").textContent = route.destInfo?.address || "";
 
-      // 산출식 하단 표시 (실제 대입된 숫자로 계산 과정을 그대로 보여줌)
-      const tripLabel = isRoundTrip ? `편도 ${singleDistance}km × 2 = ${totalDistance.toFixed(1)}km` : `편도 ${totalDistance.toFixed(1)}km`;
-      let transFormula = "해당 없음 (자차가 아니므로 미지급)";
+      // --- 유류비(자차) 계산 상세: 별도 박스 ---
+      const fuelBox = document.getElementById("fuelBox");
       if (transport === 'car') {
+        fuelBox.style.display = "block";
         const fe = FE_TABLE[fuelType].fe;
-        transFormula = `(${totalDistance.toFixed(1)}km × ${unitPrice.toLocaleString()}원) ÷ ${fe}km/L(kWh,kg) = ${transCost.toLocaleString()}원`;
+        document.getElementById("fuelDetailText").innerHTML = `
+          · 총 거리: ${isRoundTrip ? `편도 ${singleDistance}km × 2(왕복) = ` : ''}${totalDistance.toFixed(1)}km<br>
+          · 적용 단가(오피넷): ${unitPrice.toLocaleString()}원 / L(kWh,kg)<br>
+          · 적용 연비: ${fe} km/L(kWh,kg)<br>
+          · 계산식: ${totalDistance.toFixed(1)}km × ${unitPrice.toLocaleString()}원 ÷ ${fe} = <b>${transCost.toLocaleString()}원</b>
+        `;
+      } else {
+        fuelBox.style.display = "none";
       }
-      const tollFormula = (transport === 'car')
-        ? `TMAP 경로 조회 통행료${isRoundTrip ? ' × 2(왕복)' : ''} = ${tollCost.toLocaleString()}원`
-        : "해당 없음 (자차가 아니므로 미지급)";
-      const dailyFormula = `[${transport === 'car' ? '자차' : transport === 'public' ? '대중교통' : transport === 'official' ? '관차' : '도보'} / ${isOut ? '근무지 외' : '근무지 내'}${isOut ? '' : (workHours === 'over4' ? ' / 4시간 이상' : ' / 4시간 미만')}] 기준표 적용 = ${dailyCost.toLocaleString()}원`;
-      const mealFormula = isOut
-        ? `근무지 외 출장 → 기본 25,000원 - 식사차감(${mealDeduction}식) = ${mealCost.toLocaleString()}원`
-        : `근무지 내 출장(12km 미만)은 식비 미지급 = 0원`;
 
-      document.getElementById("formulaText").innerHTML = `
-        · 총 거리 = ${tripLabel}<br>
-        · 교통비 = ${transFormula}<br>
-        · 통행료 = ${tollFormula}<br>
-        · 일비 = ${dailyFormula}<br>
-        · 식비 = ${mealFormula}<br>
-        · <b>총 지급액 = 교통비(${transCost.toLocaleString()}) + 통행료(${tollCost.toLocaleString()}) + 일비(${dailyCost.toLocaleString()}) + 식비(${mealCost.toLocaleString()}) = ${totalCost.toLocaleString()}원</b>
+      // --- 공식 여비 정산 명세서 표 ---
+      const etcCost = 0; // 기타 비용 항목 (현재 자동계산 없음, 필요 시 수동 입력 항목 추가 가능)
+      document.getElementById("setDaily").textContent = dailyCost.toLocaleString() + "원";
+      document.getElementById("setMeal").textContent = mealCost.toLocaleString() + "원";
+      document.getElementById("setFuel").textContent = transCost.toLocaleString() + "원";
+      document.getElementById("setToll").textContent = tollCost.toLocaleString() + "원";
+      document.getElementById("setEtc").textContent = etcCost.toLocaleString() + "원";
+      document.getElementById("setTotal").textContent = (totalCost + etcCost).toLocaleString() + "원";
+
+      // --- 적용 기준 요약 (간단 메모) ---
+      document.getElementById("criteriaNote").innerHTML = `
+        * 적용 기준: ${transport === 'car' ? '자차' : transport === 'public' ? '대중교통' : transport === 'official' ? '관차' : '도보'} /
+        ${isOut ? '근무지 외(12km 이상)' : '근무지 내(12km 미만)' + (isOut ? '' : ` / 근무 ${workHours === 'over4' ? '4시간 이상' : '4시간 미만'}`)} /
+        ${isRoundTrip ? '왕복' : '편도'} 기준으로 산정되었습니다.
+        식비는 근무지 외 출장에만 지급됩니다.
       `;
 
       document.getElementById("resultBox").style.display = "block";
