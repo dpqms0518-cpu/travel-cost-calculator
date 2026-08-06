@@ -52,7 +52,7 @@
 <body>
 
 <div class="container">
-  <h2>🤖 축산환경관리원 여비계산 AI봇.1.3.</h2>
+  <h2>🤖 축산환경관리원 여비계산 AI봇</h2>
 
   <div class="quick-btn-group" style="margin-bottom:15px;">
     <a href="https://www.opinet.co.kr/user/dopospdrg/dopOsPdrgSelect.do" target="_blank" rel="noopener" class="btn-quick" style="text-decoration:none;">⛽ 오피넷 바로가기</a>
@@ -95,8 +95,7 @@
   </div>
   <div class="notice-info">* 오피넷 유가는 최근 5일치만 제공되어, 어제부터 최대 5일 전까지만 선택 가능합니다.</div>
   <div class="notice-info" style="margin-bottom:15px;">* 1박2일 이상 출장 시 종료일을 시작일보다 뒤로 선택하세요. 일비·식비가 출장 일수만큼 곱해집니다.</div>
-  <div class="notice-info" style="margin-bottom:15px;">
-    * 연동정보: 오피넷API, 티맵API
+  <div class="notice-info" style="margin-bottom:15px;">* 연동정보: 오피넷API, 티맵API
   </div>
 
   <!-- 1-1. 출장 인원 (여러 명 동시 출장 지원) -->
@@ -178,7 +177,7 @@
     </div>
   </div>
 
-  <div class="form-group">
+  <div class="form-group" id="generalMealGroup">
     <label for="mealOption">식사 차감 선택 (1일 기본 25,000원)</label>
     <select id="mealOption">
       <option value="0">차감 없음 (25,000원)</option>
@@ -188,17 +187,14 @@
     </select>
   </div>
 
-  <div class="form-group" id="lodgingUnitGroup" style="display:none;">
-    <label for="lodgingUnitPrice">1박당 숙박비 단가 (「여비규정」 기준, 직접 입력)</label>
-    <input type="number" id="lodgingUnitPrice" value="0" min="0" step="1000">
-    <div class="notice-info">* 앱에 공식 숙박비 단가표가 없어 직접 입력이 필요합니다. 박수(=출장일수-1) × 인원수만큼 곱해 계산됩니다.</div>
-  </div>
-
-  <div class="form-group" id="trainingBilledGroup" style="display:none;">
-    <label for="trainingLodgingFee">교육기관 청구 숙박비 (1인당, 합숙)</label>
-    <input type="number" id="trainingLodgingFee" value="0" min="0" step="1000">
-    <label for="trainingMealFee" style="margin-top:10px;">교육기관 청구 식비 (1인당, 합숙 전체기간)</label>
-    <input type="number" id="trainingMealFee" value="0" min="0" step="1000">
+  <div class="form-group" id="trainingMealGroup" style="display:none;">
+    <label for="trainingMealOption">식비 차감 선택 (교육훈련)</label>
+    <select id="trainingMealOption">
+      <option value="0">교육비내 식비 미포함 (25,000원)</option>
+      <option value="1">1식 제공 (16,000원)</option>
+      <option value="2">2식 제공 (8,000원)</option>
+      <option value="3">3식 제공 (0원)</option>
+    </select>
   </div>
 
   <button class="btn-calc" id="btnCalc" onclick="calculateTravelCost()">🚀 출장비 자동 정산 계산하기</button>
@@ -348,19 +344,16 @@
 
   function updateFormVisibility() {
     const expenseType = document.querySelector('input[name="expenseType"]:checked').value;
-    const lodgingTypeEl = document.querySelector('input[name="lodgingType"]:checked');
-    const lodgingType = lodgingTypeEl ? lodgingTypeEl.value : 'group';
-    const dayCount = calcDayCount();
 
-    const lodgingUnitGroup = document.getElementById("lodgingUnitGroup");
-    const trainingBilledGroup = document.getElementById("trainingBilledGroup");
+    const generalMealGroup = document.getElementById("generalMealGroup");
+    const trainingMealGroup = document.getElementById("trainingMealGroup");
 
     if (expenseType === 'training') {
-      trainingBilledGroup.style.display = (lodgingType === 'group') ? 'block' : 'none';
-      lodgingUnitGroup.style.display = (lodgingType === 'individual') ? 'block' : 'none';
+      generalMealGroup.style.display = 'none';
+      trainingMealGroup.style.display = 'block';
     } else {
-      trainingBilledGroup.style.display = 'none';
-      lodgingUnitGroup.style.display = (dayCount > 1) ? 'block' : 'none';
+      generalMealGroup.style.display = 'block';
+      trainingMealGroup.style.display = 'none';
     }
   }
 
@@ -640,10 +633,6 @@
       const numPeople = travelers.length;
       const fuelPayer = travelers.find(t => t.isFuelPayer); // 없을 수 있음 (undefined)
 
-      const lodgingUnitPrice = parseInt(document.getElementById("lodgingUnitPrice").value) || 0;
-      const trainingLodgingFee = parseInt(document.getElementById("trainingLodgingFee").value) || 0;
-      const trainingMealFee = parseInt(document.getElementById("trainingMealFee").value) || 0;
-
       let totalDaily, totalMeal, totalLodging;
       let dailyRemarkText, mealRemarkText, lodgingRemarkText;
       let dailyFormulaText, mealFormulaText;
@@ -662,35 +651,16 @@
         dailyRemarkText = `교육훈련(등록·수료일 전액${lodgingType === 'group' ? ', 기타일 0원' : ', 기타일 5할'})`;
         dailyFormulaText = `등록·수료(${dailyPerPerson.toLocaleString()}×${entryCompletionDays}일)${otherDays > 0 ? ` + 기타일(${otherDayRate.toLocaleString()}×${otherDays}일)` : ''} × ${numPeople}명 = ${totalDaily.toLocaleString()}원`;
 
-        // 식비
-        if (lodgingType === 'group') {
-          totalMeal = trainingMealFee * numPeople;
-          mealRemarkText = '합숙(기관청구)';
-          mealFormulaText = `기관청구(1인 ${trainingMealFee.toLocaleString()}) × ${numPeople}명 = ${totalMeal.toLocaleString()}원`;
-        } else if (!isOut) {
-          const oneMeal = mealRates[2]; // 1식분 = 8,000원
-          totalMeal = oneMeal * numPeople * dayCount;
-          mealRemarkText = '비합숙·근무지내(1식분)';
-          mealFormulaText = `1식분(${oneMeal.toLocaleString()}) × ${numPeople}명 × ${dayCount}일 = ${totalMeal.toLocaleString()}원`;
-        } else {
-          const mealRate = mealRates[mealDeduction];
-          totalMeal = mealRate * numPeople * dayCount;
-          mealRemarkText = '비합숙·근무지외(여비규정)';
-          mealFormulaText = `여비규정 식비(${mealRate.toLocaleString()}) × ${numPeople}명 × ${dayCount}일 = ${totalMeal.toLocaleString()}원`;
-        }
+        // 식비: 교육훈련 전용 셀렉트(교육비내 식비 미포함/1식·2식·3식 제공) 사용
+        const trainingMealDeduction = parseInt(document.getElementById("trainingMealOption").value);
+        const trainingMealRate = mealRates[trainingMealDeduction];
+        totalMeal = trainingMealRate * numPeople * dayCount;
+        mealRemarkText = document.getElementById("trainingMealOption").selectedOptions[0].text;
+        mealFormulaText = `${trainingMealRate.toLocaleString()} × ${numPeople}명 × ${dayCount}일 = ${totalMeal.toLocaleString()}원`;
 
-        // 숙박비
-        if (lodgingType === 'group') {
-          totalLodging = trainingLodgingFee * numPeople;
-          lodgingRemarkText = '합숙(기관청구)';
-        } else if (!isOut) {
-          totalLodging = 0;
-          lodgingRemarkText = '비합숙·근무지내(지급없음)';
-        } else {
-          const nights = Math.max(dayCount - 1, 0);
-          totalLodging = lodgingUnitPrice * nights * numPeople;
-          lodgingRemarkText = `비합숙·근무지외(1박 ${lodgingUnitPrice.toLocaleString()}원×${nights}박)`;
-        }
+        // 숙박비: 자동계산 없음 (0원 고정). 필요 시 "기타" 란에 직접 더해서 반영하세요.
+        totalLodging = 0;
+        lodgingRemarkText = '';
       } else {
         // --- 일반여비 (기존 방식) ---
         const mealPerPerson = isOut ? mealRates[mealDeduction] : 0;
@@ -705,9 +675,9 @@
           ? `${mealPerPerson.toLocaleString()} x ${numPeople}명 x ${dayCount}일 = ${totalMeal.toLocaleString()}원`
           : `${totalMeal.toLocaleString()}원`;
 
-        const nights = Math.max(dayCount - 1, 0);
-        totalLodging = lodgingUnitPrice * nights * numPeople;
-        lodgingRemarkText = nights > 0 ? `1박 ${lodgingUnitPrice.toLocaleString()}원×${nights}박(직접입력)` : '';
+        // 숙박비: 자동계산 없음 (0원 고정). 필요 시 "기타" 란에 직접 더해서 반영하세요.
+        totalLodging = 0;
+        lodgingRemarkText = '';
       }
 
       let tollCost = (transport === 'car') ? totalToll : 0;
@@ -791,6 +761,7 @@
         ${isRoundTrip ? '왕복' : '편도'} 기준으로 산정되었습니다.
         ${expenseType === 'training' ? `합숙 여부: ${lodgingType === 'group' ? '합숙' : '비합숙'}. ` : ''}
         유류비·통행료는 ${fuelPayer ? `유류비 부담자(${fuelPayer.name})에게만` : '별도로(개인 배분 없이)'} 배정됩니다.
+        ※ 숙박비는 자동 계산되지 않습니다. 발생 시 "기타" 란에 직접 더해 반영해 주세요.
       `;
 
       document.getElementById("resultBox").style.display = "block";
