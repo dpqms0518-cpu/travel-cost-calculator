@@ -90,8 +90,12 @@
       <label><input type="radio" name="lodgingType" value="group" checked onchange="toggleTrainingSubOptions()"> 합숙</label>
       <label><input type="radio" name="lodgingType" value="individual" onchange="toggleTrainingSubOptions()"> 비합숙</label>
     </div>
+    <label style="margin-top:10px; font-weight:normal; display:flex; align-items:center; gap:6px;">
+      <input type="checkbox" id="institutionMealCharged"> 교육기관에서 식비(또는 중식비)를 청구함
+    </label>
     <div class="notice-info">
-      * "등록일(입교일)"·"수료일"은 시작일·종료일로 자동 적용되고, 그 사이 날짜는 "기타일"로 계산됩니다.
+      * "등록일(입교일)"·"수료일"은 시작일·종료일로 자동 적용되고, 그 사이 날짜는 "기타일"로 계산됩니다.<br>
+      * 합숙·비합숙근무지내는 기관청구 시 식비 0원 / 비합숙근무지외는 기관청구(중식비) 시 16,000원(1식 제외)이 적용됩니다.
     </div>
   </div>
 
@@ -552,6 +556,7 @@
     document.querySelector('input[name="workHours"][value="over4"]').checked = true;
     document.getElementById("mealOption").selectedIndex = 0;
     document.getElementById("trainingMealOption").selectedIndex = 0;
+    document.getElementById("institutionMealCharged").checked = false;
     document.getElementById("manualTransportFee").value = 0;
     document.getElementById("manualLodgingFee").value = 0;
     document.getElementById("manualFuelFee").value = 0;
@@ -810,12 +815,48 @@
         dailyRemarkText = `교육훈련(등록·수료일 전액${lodgingType === 'group' ? ', 기타일 0원' : ', 기타일 5할'})`;
         dailyFormulaText = `등록·수료(${entryRate.toLocaleString()}×${entryCompletionDays}일)${otherDays > 0 ? ` + 기타일(${otherDayRate.toLocaleString()}×${otherDays}일)` : ''} × ${numPeople}명 = ${totalDaily.toLocaleString()}원`;
 
-        // 식비: 교육훈련 전용 셀렉트(교육비내 식비 미포함/1식·2식·3식 제공) 사용
+        // 식비: 합숙·비합숙근무지내는 기관청구시 0원 / 비합숙근무지외는 기관청구(중식비)시 16,000원
+        const institutionMealCharged = document.getElementById("institutionMealCharged").checked;
         const trainingMealDeduction = parseInt(document.getElementById("trainingMealOption").value);
-        const trainingMealRate = mealRates[trainingMealDeduction];
-        totalMeal = trainingMealRate * numPeople * dayCount;
-        mealRemarkText = document.getElementById("trainingMealOption").selectedOptions[0].text;
-        mealFormulaText = `${trainingMealRate.toLocaleString()} × ${numPeople}명 × ${dayCount}일 = ${totalMeal.toLocaleString()}원`;
+        const selectedMealRate = mealRates[trainingMealDeduction];
+        const selectedMealLabel = document.getElementById("trainingMealOption").selectedOptions[0].text;
+
+        if (lodgingType === 'group') {
+          // 1. 근무지내·합숙 / 3. 근무지외·합숙
+          if (institutionMealCharged) {
+            totalMeal = 0;
+            mealRemarkText = '합숙(기관청구, 식비 0원)';
+            mealFormulaText = '기관 청구로 식비 0원';
+          } else {
+            totalMeal = selectedMealRate * numPeople * dayCount;
+            mealRemarkText = `합숙(${selectedMealLabel})`;
+            mealFormulaText = `${selectedMealRate.toLocaleString()} × ${numPeople}명 × ${dayCount}일 = ${totalMeal.toLocaleString()}원`;
+          }
+        } else if (!isOut) {
+          // 2. 근무지내·비합숙: 8,000원 또는 기관청구시 0원
+          if (institutionMealCharged) {
+            totalMeal = 0;
+            mealRemarkText = '비합숙·근무지내(기관청구, 식비 0원)';
+            mealFormulaText = '기관 청구로 식비 0원';
+          } else {
+            const oneMeal = mealRates[2]; // 1식분 = 8,000원
+            totalMeal = oneMeal * numPeople * dayCount;
+            mealRemarkText = '비합숙·근무지내(1식분)';
+            mealFormulaText = `${oneMeal.toLocaleString()} × ${numPeople}명 × ${dayCount}일 = ${totalMeal.toLocaleString()}원`;
+          }
+        } else {
+          // 4. 근무지외·비합숙: 여비규정상 식비, 단 기관이 중식비 청구시 1식(8,000원) 제외한 16,000원
+          if (institutionMealCharged) {
+            const rate = mealRates[1]; // 16,000원 (1식 제외)
+            totalMeal = rate * numPeople * dayCount;
+            mealRemarkText = '비합숙·근무지외(중식비 제외)';
+            mealFormulaText = `${rate.toLocaleString()} × ${numPeople}명 × ${dayCount}일 = ${totalMeal.toLocaleString()}원`;
+          } else {
+            totalMeal = selectedMealRate * numPeople * dayCount;
+            mealRemarkText = `비합숙·근무지외(${selectedMealLabel})`;
+            mealFormulaText = `${selectedMealRate.toLocaleString()} × ${numPeople}명 × ${dayCount}일 = ${totalMeal.toLocaleString()}원`;
+          }
+        }
 
         // 숙박비: 수기입력값 사용
         totalLodging = manualLodgingFeeInput;
