@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>🤖 축산환경관리원 여비계산 AI봇</title>
   <style>
+    html { scroll-behavior: smooth; }
     body { font-family: 'Malgun Gothic', 'Noto Sans KR', sans-serif; margin: 20px; background-color: #f4f6f9; color: #333; line-height: 1.6; }
     .container { max-width: 680px; margin: 0 auto; background: #ffffff; padding: 25px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
     h2 { border-bottom: 2px solid #007bff; padding-bottom: 10px; color: #1a252f; margin-top: 0; }
@@ -56,6 +57,7 @@
       .btn-calc, #manualExpenseDetails, .quick-btn-group, .no-print { display: none !important; }
     }
   </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -75,6 +77,7 @@
     <a href="https://www.opinet.co.kr/user/dopospdrg/dopOsPdrgSelect.do" target="_blank" rel="noopener" class="btn-quick" style="text-decoration:none;">⛽ 오피넷 바로가기</a>
     <a href="https://map.naver.com/p/?c=14163850.5599634,4372026.8580034,15,0,0,0,dh" target="_blank" rel="noopener" class="btn-quick" style="text-decoration:none;">🗺️ 지도 바로가기</a>
     <a href="docs/출장비 정산 기준.docx" target="_blank" rel="noopener" class="btn-quick" style="text-decoration:none;">📄 출장비 기준(26.8월)</a>
+    <a href="#chatbotSection" class="btn-quick" style="text-decoration:none;">💬 여비챗봇 바로가기</a>
   </div>
 
   <!-- 0. 여비 종류 선택 -->
@@ -334,9 +337,25 @@
     <div class="criteria-note" id="criteriaNote"></div>
 
     <div class="no-print" style="display:flex; gap:8px; margin-top:15px;">
-      <button type="button" class="btn-quick" onclick="window.print()" style="flex:1;">🖨️ 인쇄 / PDF 저장</button>
+      <button type="button" class="btn-quick" onclick="exportToExcel()" style="flex:1;">📊 엑셀 다운로드</button>
+      <button type="button" class="btn-quick" onclick="window.print()" style="flex:1;">🖨️ PDF 다운로드</button>
       <button type="button" class="btn-quick" onclick="copyResultToClipboard()" style="flex:1;">📋 결과 복사</button>
     </div>
+  </div>
+</div>
+
+<div class="container" id="chatbotSection" style="margin-top:20px; scroll-margin-top:20px;">
+  <h2 style="font-size:18px;">💬 여비챗봇</h2>
+  <div class="notice-info" style="margin-bottom:12px;">
+    * 말로 물어보면 "일비/식비"만 간단히 답해드려요. (유류비·통행료 등 복잡한 계산은 지원하지 않습니다)<br>
+    * 예시: "근무지내, 관차로 4시간 미만으로 갔다왔는데 일비/식비 얼마야?"
+  </div>
+
+  <div id="chatLog" style="max-height:280px; overflow-y:auto; border:1px solid #e0e0e0; border-radius:8px; padding:12px; background:#fafbfc; margin-bottom:10px;"></div>
+
+  <div style="display:flex; gap:8px;">
+    <input type="text" id="chatInput" placeholder="예: 근무지외에서 자차로 왕복 갔다왔는데 일비/식비 얼마야?" style="flex:1; padding:10px; border:1px solid #ccc; border-radius:5px; font-size:14px;" onkeydown="if(event.key==='Enter'){askChatbot();}">
+    <button type="button" class="btn-calc" style="width:auto; margin-top:0; padding:10px 20px;" onclick="askChatbot()">질문하기</button>
   </div>
 </div>
 
@@ -437,7 +456,7 @@
     const text = box.innerText
       .split("\n")
       .map(line => line.trim())
-      .filter(line => line !== "" && line !== "🖨️ 인쇄 / PDF 저장" && line !== "📋 결과 복사")
+      .filter(line => line !== "" && line !== "🖨️ PDF 다운로드" && line !== "📋 결과 복사" && line !== "📊 엑셀 다운로드")
       .join("\n");
 
     try {
@@ -446,6 +465,52 @@
     } catch (e) {
       alert("클립보드 복사에 실패했습니다. 직접 드래그하여 복사해주세요.");
     }
+  }
+
+  function exportToExcel() {
+    const box = document.getElementById("resultBox");
+    if (box.style.display === "none") {
+      alert("먼저 출장비를 계산해주세요.");
+      return;
+    }
+
+    const val = (id) => document.getElementById(id).textContent.trim();
+
+    const rows = [];
+    rows.push(["최종 출장비 정산 명세서"]);
+    rows.push([]);
+    rows.push(["출발지", val("resOriginName"), val("resOriginAddress")]);
+    rows.push(["도착지", val("resDestName"), val("resDestAddress")]);
+    rows.push(["출장 기간", val("resTripPeriod"), val("resDayCount") + "일"]);
+    rows.push(["이동 방식 / 총 거리", val("resTripType"), val("resDistance") + "km", val("resLocationType")]);
+    rows.push([]);
+    rows.push(["구분", "항목", "금액", "비고"]);
+    rows.push(["출장여비", "일비", val("setDaily"), val("remarkDaily")]);
+    rows.push(["", "식비", val("setMeal"), val("remarkMeal")]);
+    rows.push(["실비정산", "자차", val("setCarUsed"), val("remarkCarUsed")]);
+    rows.push(["", "교통비", val("setTransportEtc"), val("remarkTransportEtc")]);
+    rows.push(["", "숙박비", val("setLodging"), val("remarkLodging")]);
+    rows.push(["", "유류비", val("setFuel"), val("remarkFuel")]);
+    rows.push(["", "하이패스", val("setToll"), val("remarkToll")]);
+    rows.push(["기타", "", val("setEtc"), val("remarkEtc")]);
+
+    // 합계(인당 배분)는 여러 줄일 수 있어 줄바꿈 단위로 각각 행으로 분리
+    const totalLines = document.getElementById("setTotal").innerText.split("\n").filter(l => l.trim() !== "");
+    totalLines.forEach((line, i) => {
+      rows.push([i === 0 ? "합계" : "", "", line, i === 0 ? val("remarkTotal") : ""]);
+    });
+
+    rows.push(["총계", "", val("setGrandTotal")]);
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws["!cols"] = [{ wch: 14 }, { wch: 14 }, { wch: 22 }, { wch: 26 }];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "출장비정산명세서");
+
+    const today = new Date();
+    const fname = `출장비정산_${val("resOriginName")}_${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}.xlsx`;
+    XLSX.writeFile(wb, fname);
   }
 
   const FE_TABLE = {
@@ -600,6 +665,113 @@
 
   function transportLabelSafe(transport) {
     return transport === 'car' ? '자차' : transport === 'public' ? '대중교통' : transport === 'official' ? '관차' : '도보';
+  }
+
+  // --- 여비 기준 챗봇: 「여비규정」상 일비만 계산 (유류비 등 복잡한 계산 제외) ---
+  function computeSimpleDailyRate(transport, isOut, isOver4) {
+    if (transport === 'official') {
+      return isOut ? 12000 : (isOver4 ? 10000 : 0);
+    }
+    // 자차 / 대중교통 / 도보(2km 초과 가정)는 동일 기준표 적용
+    return isOut ? 25000 : (isOver4 ? 20000 : 10000);
+  }
+
+  function parseChatQuestion(text) {
+    const t = text.replace(/\s/g, '');
+
+    // 근무지내/외 판단 (명시 없으면 근무지내로 가정)
+    let isOut = false;
+    let outMentioned = false;
+    if (/근무지외|관외|시외|12km이상|12km초과/.test(t)) { isOut = true; outMentioned = true; }
+    if (/근무지내|관내|12km이내|12km미만/.test(t)) { isOut = false; outMentioned = true; }
+
+    // 이동수단 판단 (명시 없으면 자차로 가정)
+    let transport = 'car';
+    let transportLabel = '자차';
+    if (/관차/.test(t)) { transport = 'official'; transportLabel = '관차'; }
+    else if (/도보|걸어/.test(t)) { transport = 'walk'; transportLabel = '도보'; }
+    else if (/대중교통|버스|지하철/.test(t)) { transport = 'public'; transportLabel = '대중교통'; }
+    else if (/자차|자가용|내차/.test(t)) { transport = 'car'; transportLabel = '자차'; }
+
+    // 근무시간 판단 (명시 없으면 4시간 이상으로 가정)
+    let isOver4 = true;
+    if (/4시간미만|4시간이하|네시간미만/.test(t)) { isOver4 = false; }
+    else if (/4시간이상|네시간이상/.test(t)) { isOver4 = true; }
+
+    // 무엇을 묻는지 판단
+    const askDaily = /일비/.test(t);
+    const askMeal = /식비/.test(t);
+
+    return { isOut, outMentioned, transport, transportLabel, isOver4, askDaily, askMeal };
+  }
+
+  function appendChatBubble(role, text) {
+    const log = document.getElementById("chatLog");
+    const bubble = document.createElement("div");
+    bubble.style.margin = "6px 0";
+    bubble.style.display = "flex";
+    bubble.style.justifyContent = (role === 'user') ? 'flex-end' : 'flex-start';
+
+    const inner = document.createElement("div");
+    inner.style.maxWidth = "80%";
+    inner.style.padding = "8px 12px";
+    inner.style.borderRadius = "12px";
+    inner.style.fontSize = "13px";
+    inner.style.lineHeight = "1.5";
+    inner.style.whiteSpace = "pre-line";
+    if (role === 'user') {
+      inner.style.background = "#007bff";
+      inner.style.color = "#fff";
+    } else {
+      inner.style.background = "#eef4fb";
+      inner.style.color = "#1a252f";
+      inner.style.border = "1px solid #d0e2ff";
+    }
+    inner.textContent = text;
+    bubble.appendChild(inner);
+    log.appendChild(bubble);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function askChatbot() {
+    const input = document.getElementById("chatInput");
+    const question = input.value.trim();
+    if (!question) return;
+
+    appendChatBubble('user', question);
+    input.value = "";
+
+    const p = parseChatQuestion(question);
+    const daily = computeSimpleDailyRate(p.transport, p.isOut, p.isOver4);
+    // 식비는 근무지 외 출장에만 지급 (근무지 내는 0원), 기본값(차감 없음) 25,000원 가정
+    const meal = p.isOut ? 25000 : 0;
+
+    let answerParts = [];
+    let assumptionNote = [];
+    if (!p.outMentioned) assumptionNote.push('근무지 내로 가정');
+    if (!/4시간/.test(question)) assumptionNote.push('4시간 이상 근무로 가정');
+    if (!/관차|도보|대중교통|버스|지하철|자차|자가용|내차/.test(question)) assumptionNote.push('자차로 가정');
+
+    if (p.askDaily && !p.askMeal) {
+      answerParts.push(`일비 ${daily.toLocaleString()}원입니다.`);
+    } else if (p.askMeal && !p.askDaily) {
+      answerParts.push(`식비 ${meal.toLocaleString()}원입니다.`);
+    } else {
+      const total = daily + meal;
+      if (total === 0) {
+        answerParts.push('0원입니다.');
+      } else {
+        answerParts.push(`일비 ${daily.toLocaleString()}원 + 식비 ${meal.toLocaleString()}원 = 총 ${total.toLocaleString()}원입니다.`);
+      }
+    }
+
+    let answer = `[${p.isOut ? '근무지외' : '근무지내'} · ${p.transportLabel}${p.isOut ? '' : ` · ${p.isOver4 ? '4시간이상' : '4시간미만'}`} 기준]\n` + answerParts.join(' ');
+    if (assumptionNote.length > 0) {
+      answer += `\n(※ 질문에 없는 조건은 ${assumptionNote.join(', ')}했습니다.)`;
+    }
+    answer += '\n※ 유류비·통행료 등은 이 챗봇에서 계산하지 않습니다. 위 계산기를 이용해주세요.';
+
+    appendChatBubble('bot', answer);
   }
 
   async function fetchOpinetNationalPrice(dateStr, prodCode) {
