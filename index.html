@@ -91,7 +91,6 @@
       <label><input type="radio" name="lodgingType" value="individual" onchange="toggleTrainingSubOptions()"> 비합숙</label>
     </div>
     <div class="notice-info">
-      * 교육훈련여비의 "근무지내" 기준은 왕복 50km 이내 교육기관입니다 (일반여비의 12km 기준과 다릅니다).<br>
       * "등록일(입교일)"·"수료일"은 시작일·종료일로 자동 적용되고, 그 사이 날짜는 "기타일"로 계산됩니다.
     </div>
   </div>
@@ -722,7 +721,7 @@
       const destFullText = `${route.destInfo?.name || destination} ${route.destInfo?.address || ''}`;
       const isSejongDestination = destFullText.includes('세종');
       // 일반여비: 왕복 12km 기준 / 교육훈련여비: 왕복 50km 기준(제20조)
-      const outThreshold = (expenseType === 'training') ? 50 : 12;
+      const outThreshold = 12; // 교육훈련여비도 일반여비와 동일하게 왕복 12km 기준 적용
       const isOut = isSejongDestination ? false : (totalDistance >= outThreshold);
 
       const statusEl = document.getElementById("statusMessage");
@@ -792,12 +791,24 @@
         }
 
         // 일비: 등록일(입교일)·수료일은 전액 / 기타일은 합숙 0원, 비합숙 여비규정 일비의 5할
+        // 주의: 근무지내·합숙은 실제 근무시간(4시간 이상/미만) 선택과 무관하게 항상 "전액"(자차·대중교통 20,000 / 관차 10,000)이 적용됨.
+        //      근무지내·비합숙과 근무지외(합숙/비합숙 모두)는 기존 dailyCost(=dailyPerPerson) 값을 그대로 사용.
+        let entryRate = dailyPerPerson;
+        if (!isOut && lodgingType === 'group') {
+          if (transport === 'car' || transport === 'public') {
+            entryRate = 20000;
+          } else if (transport === 'official') {
+            entryRate = 10000;
+          }
+          // 도보 등 그 외 이동수단은 별도 규정이 없어 기존 dailyPerPerson 값을 그대로 사용
+        }
+
         const entryCompletionDays = dayCount >= 2 ? 2 : 1;
         const otherDays = Math.max(dayCount - 2, 0);
-        const otherDayRate = (lodgingType === 'group') ? 0 : Math.round(dailyPerPerson * 0.5);
-        totalDaily = (dailyPerPerson * entryCompletionDays + otherDayRate * otherDays) * numPeople;
+        const otherDayRate = (lodgingType === 'group') ? 0 : Math.round(entryRate * 0.5);
+        totalDaily = (entryRate * entryCompletionDays + otherDayRate * otherDays) * numPeople;
         dailyRemarkText = `교육훈련(등록·수료일 전액${lodgingType === 'group' ? ', 기타일 0원' : ', 기타일 5할'})`;
-        dailyFormulaText = `등록·수료(${dailyPerPerson.toLocaleString()}×${entryCompletionDays}일)${otherDays > 0 ? ` + 기타일(${otherDayRate.toLocaleString()}×${otherDays}일)` : ''} × ${numPeople}명 = ${totalDaily.toLocaleString()}원`;
+        dailyFormulaText = `등록·수료(${entryRate.toLocaleString()}×${entryCompletionDays}일)${otherDays > 0 ? ` + 기타일(${otherDayRate.toLocaleString()}×${otherDays}일)` : ''} × ${numPeople}명 = ${totalDaily.toLocaleString()}원`;
 
         // 식비: 교육훈련 전용 셀렉트(교육비내 식비 미포함/1식·2식·3식 제공) 사용
         const trainingMealDeduction = parseInt(document.getElementById("trainingMealOption").value);
